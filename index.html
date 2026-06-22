@@ -17,36 +17,22 @@
   3. Until you add a real photo.jpg, the page automatically draws a soft
      placeholder heart so the demo still works out of the box.
 
-  HOW IT WORKS (read the comments in <style> and <script> below for detail)
-  - The page is a single HTML file: structure (HTML), look (CSS) and
-    behaviour (JavaScript) all live here, so it works completely offline.
-  - When "photo.jpg" loads, we secretly shrink it down to a small grid
-    (e.g. 70 x 90 cells) and measure the brightness of every cell.
-  - We then create one little "particle" of text for every bright-enough
-    cell. Each particle is one character from the repeating phrase
-    "Happy 7th Monthsary, Mahal. I Love You ❤️".
-  - Those particles start out scattered randomly across the screen (so it
-    looks like the phrase is multiplying), then drift into the exact
-    position their brightness value says they belong — and the portrait
-    emerges, made entirely of the words of the message.
+  WHAT CHANGED IN THIS FIX (the "portrait not visible" problem)
+  - The old version filled the whole frame with text as one solid block,
+    so the subject never emerged. That was a TONE-MAPPING issue, not a bug
+    in the animation. Fixed by:
+      * PERCENTILE contrast stretch (robust against a couple of stray very
+        bright / very dark pixels that used to flatten the whole image).
+      * A much higher default brightness threshold, so dark areas become
+        real negative space instead of more text.
+      * LIVE SLIDERS (Contrast / Detail) + an INVERT toggle, revealed once
+        the portrait forms — so you can dial it in for YOUR photo without
+        editing any code. Invert is the fix when your subject is DARKER
+        than the background (e.g. a selfie against a bright wall).
   ============================================================================
 -->
 
 <style>
-  /* ==========================================================================
-     DESIGN TOKENS
-     A small, named palette + two type roles, used consistently everywhere.
-     - noir / wine     -> base background (warm near-black, not pure #000)
-     - blush / ember    -> the "pulse" of the page: hearts, glow, accents
-     - rosegold         -> headings / buttons, a quiet metallic warmth
-     - champagne        -> the colour the final love letter text fades in as
-     Typography:
-     - Display/serif    -> "Iowan Old Style / Palatino / Georgia" stack,
-                            used for the big romantic headline + final letter
-     - Mono              -> used for the typed line AND the ASCII portrait,
-                            because a love letter that looks "typed" on a
-                            typewriter is the whole visual idea of this piece
-  ========================================================================== */
   :root{
     --noir: #0b0608;
     --wine: #2a0f1a;
@@ -71,8 +57,6 @@
     -webkit-tap-highlight-color: transparent;
   }
 
-  /* A warm, vignette-style radial gradient instead of flat black —
-     keeps the "dark theme" requirement but feels candlelit, not corporate. */
   body{
     background:
       radial-gradient(ellipse at 50% 20%, rgba(255,140,170,0.10), transparent 55%),
@@ -83,11 +67,7 @@
   button{ font-family: inherit; cursor:pointer; }
   button:focus-visible{ outline: 2px solid var(--blush); outline-offset: 3px; }
 
-  /* ==========================================================================
-     FLOATING HEARTS (ambient atmosphere)
-     Pure CSS keyframe animation. JS only spawns/removes the elements;
-     all the motion itself is handled by the GPU via CSS transforms.
-  ========================================================================== */
+  /* ============ FLOATING HEARTS ============ */
   .hearts-layer{
     position:absolute; inset:0; overflow:hidden; pointer-events:none; z-index:1;
   }
@@ -106,9 +86,7 @@
     100% { transform: translate(var(--drift,20px), -115vh) rotate(360deg); opacity:0; }
   }
 
-  /* ==========================================================================
-     LANDING PAGE
-  ========================================================================== */
+  /* ============ LANDING PAGE ============ */
   .landing{
     position:relative; z-index:2;
     min-height:100vh; display:flex; flex-direction:column;
@@ -141,9 +119,6 @@
     font-style: italic;
   }
 
-  /* The signature interaction: a single button whose glow gently
-     "breathes" like a heartbeat — restrained motion, but it's the one
-     moment on this page allowed to draw the eye. */
   #openBtn{
     position:relative;
     border:1px solid rgba(255,184,201,0.55);
@@ -164,9 +139,7 @@
     50%      { box-shadow: 0 0 30px rgba(255,107,133,0.55); }
   }
 
-  /* ==========================================================================
-     MODAL / SURPRISE OVERLAY
-  ========================================================================== */
+  /* ============ MODAL / SURPRISE OVERLAY ============ */
   #modalOverlay{
     position:fixed; inset:0; z-index:50;
     background:
@@ -199,7 +172,7 @@
   }
   .ctrl-btn:hover{ opacity:1; background: rgba(255,107,133,0.18); }
 
-  /* Phase 1: the single typed line, the "seed" sentence of the whole piece */
+  /* Phase 1: the typed seed line */
   #introWrap{
     width:100%; max-width: 640px;
     margin-top: 6vh;
@@ -222,7 +195,7 @@
   }
   @keyframes blink{ 50%{ opacity:0; } }
 
-  /* Phase 2–4: the canvas where the portrait assembles itself out of text */
+  /* Phase 2–4: the portrait canvas */
   #canvasWrap{
     margin-top: 4vh;
     opacity:0; transform: scale(.97);
@@ -236,9 +209,58 @@
     box-shadow: 0 0 40px rgba(255,107,133,0.12);
   }
 
-  /* The closing letter, fading in only once the portrait is fully formed */
+  /* ============ LIVE TUNING PANEL (revealed after portrait forms) ============ */
+  #tunePanel{
+    margin-top: 1.8rem;
+    width: 100%; max-width: 360px;
+    background: rgba(20,8,13,0.55);
+    border: 1px solid rgba(255,184,201,0.18);
+    border-radius: 14px;
+    padding: 1rem 1.15rem 1.15rem;
+    backdrop-filter: blur(6px);
+    opacity:0; transform: translateY(8px);
+    transition: opacity .8s ease, transform .8s ease;
+    pointer-events:none;
+  }
+  #tunePanel.show{ opacity:1; transform: translateY(0); pointer-events:auto; }
+  #tunePanel .panel-title{
+    font-family: var(--mono);
+    font-size:.62rem; letter-spacing:.22em; text-transform:uppercase;
+    color: var(--rosegold); opacity:.85; text-align:center;
+    margin-bottom: .9rem;
+  }
+  .tune-row{
+    display:flex; align-items:center; gap:.7rem; margin-bottom:.7rem;
+  }
+  .tune-row label{
+    font-family: var(--mono); font-size:.7rem; letter-spacing:.04em;
+    color: var(--champagne); opacity:.85; width: 4.6rem; flex:none;
+  }
+  .tune-row input[type="range"]{
+    flex:1; accent-color: var(--ember); height: 4px; cursor:pointer;
+  }
+  .tune-actions{
+    display:flex; gap:.5rem; margin-top:.4rem;
+  }
+  .tune-actions button{
+    flex:1;
+    border:1px solid rgba(255,233,214,0.25);
+    background: rgba(255,107,133,0.10);
+    color: var(--champagne);
+    font-family: var(--mono); font-size:.68rem; letter-spacing:.04em;
+    padding:.5rem; border-radius: 8px;
+    transition: background .2s ease;
+  }
+  .tune-actions button:hover{ background: rgba(255,107,133,0.22); }
+  .tune-toggle{
+    display:flex; align-items:center; gap:.5rem; margin-bottom:.85rem;
+    font-family: var(--mono); font-size:.7rem; color: var(--champagne); opacity:.85;
+  }
+  .tune-toggle input{ accent-color: var(--ember); width:16px; height:16px; cursor:pointer; }
+
+  /* The closing letter */
   #finalMessage{
-    margin-top: 3.2rem;
+    margin-top: 2.4rem;
     text-align:center;
     max-width: 38ch;
     opacity:0; transform: translateY(10px);
@@ -262,9 +284,6 @@
     font-size: .8rem;
   }
 
-  /* ==========================================================================
-     RESPONSIVE ADJUSTMENTS
-  ========================================================================== */
   @media (max-width: 480px){
     .landing{ padding: 10vh 7vw; }
     #introWrap{ margin-top: 3vh; }
@@ -272,8 +291,6 @@
     .ctrl-btn{ padding:.4rem .65rem; font-size:.68rem; }
   }
 
-  /* Respect users who've asked the OS for less motion: keep the *content*
-     reveal (it IS the message) but drop decorative animation. */
   @media (prefers-reduced-motion: reduce){
     .heart-particle, #openBtn{ animation: none !important; }
     .cursor{ animation: none !important; opacity:1; }
@@ -302,17 +319,37 @@
       <button class="ctrl-btn" id="closeBtn" aria-label="Close">✕</button>
     </div>
 
-    <!-- Phase 1: the seed sentence, typed like an invisible person is writing it -->
+    <!-- Phase 1: the seed line -->
     <div id="introWrap">
       <span id="introText"></span><span class="cursor" id="cursor">&nbsp;</span>
     </div>
 
-    <!-- Phase 2–4: the same sentence, multiplied, becomes a portrait -->
+    <!-- Phase 2–4: the portrait -->
     <div id="canvasWrap">
       <canvas id="asciiCanvas" aria-label="A portrait formed entirely out of the words of this message"></canvas>
     </div>
 
-    <!-- Revealed only once the portrait is fully assembled -->
+    <!-- Live tuning: appears once the portrait forms -->
+    <div id="tunePanel" aria-label="Adjust how the portrait looks">
+      <div class="panel-title">tune the portrait ❤</div>
+      <label class="tune-toggle">
+        <input type="checkbox" id="invertToggle">
+        Invert (use if the face is darker than the background)
+      </label>
+      <div class="tune-row">
+        <label for="contrastRange">Contrast</label>
+        <input type="range" id="contrastRange" min="100" max="320" value="200">
+      </div>
+      <div class="tune-row">
+        <label for="detailRange">Detail</label>
+        <input type="range" id="detailRange" min="0" max="100" value="42">
+      </div>
+      <div class="tune-actions">
+        <button id="replayBtn">▶ Replay animation</button>
+      </div>
+    </div>
+
+    <!-- Closing letter -->
     <div id="finalMessage">
       <p>Thank you for being part of my life.<br>
          Happy 7th Monthsary, Mahal.<br>
@@ -323,61 +360,42 @@
 
 <script>
 /* ============================================================================
-   ALL BEHAVIOUR LIVES IN THIS ONE SCRIPT BLOCK — no build step, no backend,
-   no external libraries. Organised top-to-bottom as:
-     1. Config & small math/utility helpers
-     2. Floating hearts (ambient decoration)
-     3. Typewriter effect (Phase 1)
-     4. Image brightness sampling + heart-shaped fallback
-     5. Particle system: building + animating the ASCII portrait (Phase 2-4)
-     6. Orchestration: open/close/skip + wiring it all together
+   ALL BEHAVIOUR LIVES IN THIS ONE SCRIPT BLOCK — no build step, no backend.
    ============================================================================ */
 
 (() => {
   "use strict";
 
-  /* --------------------------------------------------------------------
-     1. CONFIG & UTILITIES
-  -------------------------------------------------------------------- */
+  /* ---------------- 1. CONFIG & UTILITIES ---------------- */
 
-  // The exact phrase, repeated endlessly to "paint" the portrait. The
-  // trailing space keeps a visible gap between one copy of the phrase
-  // and the next as it wraps across the grid.
   const PHRASE = "Happy 7th Monthsary, Mahal. I Love You \u2764\uFE0F ";
 
   const reduceMotion = window.matchMedia &&
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const isMobile = window.innerWidth < 560;
 
-  // Timing constants for the particle animation (all in milliseconds).
-  // Tweak these to make the reveal faster/slower without touching logic.
-  const SCATTER_WINDOW = 1200;   // how spread out particle "appear" times are (Phase 2)
-  const FORM_WINDOW    = 1000;   // extra spread added before particles start moving (Phase 3)
-  const FADE_IN_DUR    = 380;    // how long a single particle takes to fade in
-  const FILL_WINDOW    = 1400;   // spread for the late "detail fill" particles (Phase 4)
-  const SCATTER_ALPHA  = 0.45;   // opacity of particles while still "scattered" / unplaced
+  const SCATTER_WINDOW = 1200;
+  const FORM_WINDOW    = 1000;
+  const FADE_IN_DUR    = 380;
+  const FILL_WINDOW    = 1400;
+  const SCATTER_ALPHA  = 0.45;
 
-  // How "selective" the portrait is about where it puts text. Raise
-  // SKIP_THRESHOLD if the shape still looks like a solid block (excludes
-  // more of the background); lower it if too much of the photo is
-  // disappearing into empty space.
-  const SKIP_THRESHOLD = 0.60;
-  const DITHER_CUTOFF  = 0.42;
+  // These are now LIVE-TUNABLE via the on-screen sliders. The values below
+  // are just sensible starting points that carve out real negative space
+  // (the old defaults of 0.16 / 1.7 produced the "solid block" you saw).
+  let SKIP_THRESHOLD = 0.40;   // cells dimmer than this become empty space
+  let DITHER_SPAN    = 0.18;   // soft probabilistic band just above the threshold
+  let CONTRAST_BOOST = 2.0;    // S-curve strength around the midtones
+  let INVERT         = false;  // flip light/dark (for dark-subject-on-light-bg photos)
 
   const lerp = (a, b, t) => a + (b - a) * t;
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
   const easeInOutCubic = t => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
   const rand = (a, b) => a + Math.random() * (b - a);
 
-  /* --------------------------------------------------------------------
-     2. FLOATING HEARTS
-     Decorative only — spawns small ❤ glyphs that drift upward via the
-     CSS "floatUp" keyframe defined in <style>. JS just creates/removes
-     the DOM nodes; the browser's compositor handles the motion itself,
-     which is what keeps this smooth even on older phones.
-  -------------------------------------------------------------------- */
+  /* ---------------- 2. FLOATING HEARTS ---------------- */
   function spawnHeart(container, { faint = false } = {}) {
-    if (reduceMotion) return; // keep the page calm if the OS asks for it
+    if (reduceMotion) return;
     const span = document.createElement("span");
     span.className = "heart-particle";
     span.textContent = "❤";
@@ -391,24 +409,16 @@
     span.style.setProperty("--drift", drift + "px");
     span.style.animationDuration = duration + "s";
     container.appendChild(span);
-    // Clean up after the animation finishes so the DOM never grows unbounded.
     setTimeout(() => span.remove(), duration * 1000 + 200);
   }
-
   function startHeartLoop(container, intervalMs, opts) {
     if (reduceMotion) return () => {};
     const id = setInterval(() => spawnHeart(container, opts), intervalMs);
     return () => clearInterval(id);
   }
 
-  /* --------------------------------------------------------------------
-     3. TYPEWRITER EFFECT (Phase 1)
-     Reveals `text` into `el` one character at a time with slightly
-     randomised delays (so it reads like a real person typing, not a
-     mechanical loop), and a small extra pause after punctuation.
-  -------------------------------------------------------------------- */
+  /* ---------------- 3. TYPEWRITER (Phase 1) ---------------- */
   let typeTimer = null;
-
   function startTypewriter(text, el, onDone) {
     el.textContent = "";
     let i = 0;
@@ -420,36 +430,21 @@
         let delay = rand(45, 95);
         if (lastChar === "," || lastChar === ".") delay += 260;
         typeTimer = setTimeout(step, delay);
-      } else if (onDone) {
-        onDone();
-      }
+      } else if (onDone) onDone();
     };
-    typeTimer = setTimeout(step, 300); // brief pause before the "writing" begins
+    typeTimer = setTimeout(step, 300);
   }
-
   function finishTypewriterInstantly(text, el) {
     clearTimeout(typeTimer);
     el.textContent = text;
   }
 
-  /* --------------------------------------------------------------------
-     4. IMAGE BRIGHTNESS SAMPLING (+ heart-shaped fallback)
+  /* ---------------- 4. IMAGE BRIGHTNESS SAMPLING ---------------- */
 
-     The core trick of the whole effect: we don't need the real photo
-     pixel-for-pixel — we only need ONE brightness number (0 = pure
-     black, 1 = pure white) per grid cell. We get that cheaply by
-     drawing the photo onto a TINY off-screen canvas (cols x rows) and
-     letting the browser's own image scaling do the averaging for us.
-  -------------------------------------------------------------------- */
-
-  // Works out how many text columns/rows fit nicely on this screen while
-  // (a) respecting the photo's aspect ratio, corrected for the fact that
-  //     monospace characters are taller than they are wide, and
-  // (b) capping the total particle count so phones stay smooth.
   function computeGrid(imgW, imgH) {
-    const fontSize = isMobile ? 6.5 : 8.5;          // px
-    const cellW = fontSize * 0.6;                    // approx monospace glyph width
-    const cellH = fontSize * 1.12;                   // line height between rows
+    const fontSize = isMobile ? 6.5 : 8.5;
+    const cellW = fontSize * 0.6;
+    const cellH = fontSize * 1.12;
 
     const widthBudget = Math.min(window.innerWidth * 0.88, isMobile ? 340 : 520);
     let cols = Math.floor(widthBudget / cellW);
@@ -459,8 +454,6 @@
     const hardCapCols = isMobile ? 64 : 96;
     const hardCapRows = isMobile ? 96 : 130;
 
-    // Scale cols & rows down together (preserving aspect ratio) until the
-    // grid fits both the height budget AND the hard particle-count caps.
     const scale = Math.min(
       1,
       heightBudget / (rows * cellH || 1),
@@ -473,8 +466,9 @@
     return { cols, rows, cellW, cellH, fontSize };
   }
 
-  // Draws `img` down to `cols x rows` pixels and reads back a 0..1
-  // luminance value per cell using the standard perceptual weighting.
+  // Reads back a RAW 0..1 luminance value per cell. We keep this raw copy
+  // around so the sliders can re-process it instantly without re-decoding
+  // the photo every time.
   function sampleBrightnessFromImage(img, grid) {
     const off = document.createElement("canvas");
     off.width = grid.cols;
@@ -491,46 +485,40 @@
     return out;
   }
 
-  // Many real photos (well-lit selfies, indoor shots) only span a narrow,
-  // fairly bright range of brightness values — without correcting for
-  // that, almost every cell clears the "draw text here" threshold and the
-  // portrait turns into one solid block of text instead of a recognizable
-  // shape. This stretches whatever range the photo actually has out to
-  // the FULL 0..1 range, then pushes it through an S-curve around the
-  // midtones so light/dark areas separate more clearly.
-  // Raise CONTRAST_BOOST for a more graphic, high-contrast look;
-  // lower it for a softer, more even one.
-  const CONTRAST_BOOST = 1.7;
+  // ===== THE KEY FIX =====
+  // Old code stretched between the single darkest & single brightest pixel,
+  // so one stray highlight/shadow flattened everything into the midtones and
+  // the portrait became a solid block. Instead we stretch between the 5th and
+  // 95th PERCENTILES (robust to outliers), then apply an S-curve and optional
+  // invert. Returns a fresh array so the raw copy stays untouched.
+  function processBrightness(raw) {
+    const n = raw.length;
+    const sorted = Float32Array.from(raw).sort();
+    const lo = sorted[Math.floor(n * 0.05)];
+    const hi = sorted[Math.floor(n * 0.95)];
+    const range = (hi - lo) || 1;
 
-  function normalizeAndBoostContrast(values) {
-    let min = 1, max = 0;
-    for (let i = 0; i < values.length; i++) {
-      if (values[i] < min) min = values[i];
-      if (values[i] > max) max = values[i];
+    const out = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      let v = clamp((raw[i] - lo) / range, 0, 1);          // robust contrast stretch
+      v = clamp((v - 0.5) * CONTRAST_BOOST + 0.5, 0, 1);   // S-curve around midtones
+      if (INVERT) v = 1 - v;                                // dark-subject support
+      out[i] = v;
     }
-    const range = max - min || 1; // guard against a perfectly flat image
-    for (let i = 0; i < values.length; i++) {
-      const stretched = (values[i] - min) / range;
-      values[i] = clamp((stretched - 0.5) * CONTRAST_BOOST + 0.5, 0, 1);
-    }
-    return values;
+    return out;
   }
 
-  // Fallback used only if photo.jpg can't be loaded: a mathematically
-  // perfect heart, so the page still feels intentional and romantic
-  // even before the real photo is added.
   function heartFallbackBrightness(grid) {
     const out = new Float32Array(grid.cols * grid.rows);
     for (let r = 0; r < grid.rows; r++) {
       for (let c = 0; c < grid.cols; c++) {
         const x = (c / (grid.cols - 1) - 0.5) * 2.6;
         const y = -((r / (grid.rows - 1) - 0.5) * 2.6) - 0.15;
-        // Classic implicit heart curve: (x²+y²-1)³ - x²y³ <= 0 is "inside".
         const f = Math.pow(x * x + y * y - 1, 3) - x * x * y * y * y;
         let b = 0;
         if (f <= 0) {
           const d = Math.sqrt(x * x + (y + 0.25) * (y + 0.25));
-          b = clamp(1.1 - d * 0.42, 0.45, 1); // brighter near the heart's core
+          b = clamp(1.1 - d * 0.42, 0.45, 1);
         }
         out[r * grid.cols + c] = b;
       }
@@ -546,8 +534,9 @@
       const useFallback = () => {
         if (settled) return;
         settled = true;
-        const grid = computeGrid(1, 1.2); // a pleasant heart aspect ratio
-        resolve({ grid, brightness: heartFallbackBrightness(grid) });
+        const grid = computeGrid(1, 1.2);
+        const raw = heartFallbackBrightness(grid);
+        resolve({ grid, raw, isFallback: true });
       };
 
       img.onload = () => {
@@ -555,67 +544,51 @@
         settled = true;
         const grid = computeGrid(img.naturalWidth || 1, img.naturalHeight || 1);
         try {
-          const brightness = normalizeAndBoostContrast(sampleBrightnessFromImage(img, grid));
-          resolve({ grid, brightness });
+          const raw = sampleBrightnessFromImage(img, grid);
+          resolve({ grid, raw, isFallback: false });
         } catch (err) {
-          // Some browsers can be strict about reading pixels from local
-          // file:// images. If that happens, fall back gracefully rather
-          // than breaking the surprise.
           console.warn("Could not read photo.jpg pixels, using fallback heart.", err);
-          resolve({ grid, brightness: heartFallbackBrightness(grid) });
+          const raw = heartFallbackBrightness(grid);
+          resolve({ grid, raw, isFallback: true });
         }
       };
       img.onerror = useFallback;
       img.src = "photo.jpg";
-      setTimeout(useFallback, 2500); // safety net if the image hangs
+      setTimeout(useFallback, 2500);
     });
   }
 
-  /* --------------------------------------------------------------------
-     5. PARTICLE SYSTEM (Phase 2 → 4)
+  /* ---------------- 5. PARTICLE SYSTEM (Phase 2 → 4) ---------------- */
 
-     Every visible "character" of the portrait is a tiny particle with:
-       - a target position (where it belongs in the final portrait)
-       - either a scattered starting position (kind: "scatter") that it
-         drifts in from, or no starting position at all (kind: "fill"),
-         meaning it simply fades in directly at its final spot, later.
-     ~65% of particles are "scatter" particles — these create Phase 2
-     (copies of the phrase appearing all over the screen) and Phase 3
-     (those copies drifting into the shape of the photo). The remaining
-     ~35% are "fill" particles that fade in afterwards, directly in
-     place — this is Phase 4, "continue adding text until the portrait
-     is fully visible".
-  -------------------------------------------------------------------- */
-
-  function buildParticles(grid, brightness) {
+  function buildParticles(grid, brightness, opts = {}) {
+    const animate = opts.animate !== false; // false => snap straight to formed
     const particles = [];
     let phraseIndex = 0;
     const canvasW = grid.cols * grid.cellW;
     const canvasH = grid.rows * grid.cellH;
+    const ditherCutoff = SKIP_THRESHOLD + DITHER_SPAN;
 
     for (let r = 0; r < grid.rows; r++) {
       for (let c = 0; c < grid.cols; c++) {
         const b = brightness[r * grid.cols + c];
 
-        // True negative space: skip dim/background cells entirely so the
-        // portrait has real darkness around it, not a wall of text.
-        if (b < SKIP_THRESHOLD) continue;
+        if (b < SKIP_THRESHOLD) continue; // true negative space
 
-        // Soft, dithered edge: low-brightness cells are only sometimes
-        // included, which avoids a hard cookie-cutter outline and reads
-        // more like an organic ASCII/halftone illustration.
-        if (b < DITHER_CUTOFF && Math.random() > b * 1.9) continue;
+        // Soft dithered edge in the band just above the threshold.
+        if (b < ditherCutoff) {
+          const p = (b - SKIP_THRESHOLD) / DITHER_SPAN; // 0..1 across the band
+          if (Math.random() > p) continue;
+        }
 
         const ch = PHRASE[phraseIndex % PHRASE.length];
         phraseIndex++;
 
         const targetX = c * grid.cellW + grid.cellW / 2;
         const targetY = r * grid.cellH + grid.cellH / 2;
-        const alphaTarget = Math.pow(b, 0.8); // gentle gamma curve, nicer gradient
+        const alphaTarget = Math.pow(b, 0.8);
         const floatSeed = Math.random() * Math.PI * 2;
 
-        if (Math.random() < 0.65) {
-          // "scatter" particle -> appears somewhere random, then travels home
+        if (animate && Math.random() < 0.65) {
           particles.push({
             kind: "scatter",
             ch, brightness: b, alphaTarget, floatSeed,
@@ -627,12 +600,11 @@
             moveDuration: rand(800, 1400),
           });
         } else {
-          // "fill" particle -> fades in later, directly at its final spot
           particles.push({
             kind: "fill",
             ch, brightness: b, alphaTarget, floatSeed,
             targetX, targetY,
-            appearDelay: SCATTER_WINDOW + FORM_WINDOW + 200 + rand(0, FILL_WINDOW),
+            appearDelay: animate ? SCATTER_WINDOW + FORM_WINDOW + 200 + rand(0, FILL_WINDOW) : 0,
           });
         }
       }
@@ -640,9 +612,6 @@
     return particles;
   }
 
-  // Maps brightness (0..1) to a colour: dim cells glow soft rose, the
-  // brightest cells glow warm champagne — so the portrait looks like it's
-  // gently lit from within, rather than just "white text on black".
   function brightnessToColor(b) {
     const r = Math.round(lerp(232, 255, b));
     const g = Math.round(lerp(120, 238, b));
@@ -650,11 +619,7 @@
     return `rgb(${r},${g},${bl})`;
   }
 
-  /* --------------------------------------------------------------------
-     6. ORCHESTRATION
-     Wires together: landing button -> typewriter -> particle build ->
-     animation loop -> final message. Also handles Skip / Close.
-  -------------------------------------------------------------------- */
+  /* ---------------- 6. ORCHESTRATION ---------------- */
 
   const landing = document.getElementById("landing");
   const openBtn = document.getElementById("openBtn");
@@ -663,13 +628,18 @@
   const skipBtn = document.getElementById("skipBtn");
   const introWrap = document.getElementById("introWrap");
   const introText = document.getElementById("introText");
-  const cursor = document.getElementById("cursor");
   const canvasWrap = document.getElementById("canvasWrap");
   const canvas = document.getElementById("asciiCanvas");
   const ctx = canvas.getContext("2d");
   const finalMessage = document.getElementById("finalMessage");
   const landingHearts = document.getElementById("landingHearts");
   const modalHearts = document.getElementById("modalHearts");
+
+  const tunePanel = document.getElementById("tunePanel");
+  const invertToggle = document.getElementById("invertToggle");
+  const contrastRange = document.getElementById("contrastRange");
+  const detailRange = document.getElementById("detailRange");
+  const replayBtn = document.getElementById("replayBtn");
 
   const SEED_LINE = "Happy 7th Monthsary, Mahal. I Love You \u2764\uFE0F";
 
@@ -678,34 +648,35 @@
   let stopHeartLoopLanding = null;
   let stopHeartLoopModal = null;
 
-  // Mutable per-run state, recreated fresh every time the modal opens so
-  // the whole reveal can be replayed from the very start.
-  let state = {
-    formationStarted: false,
-    skipped: false,
-    messageShown: false,
-    phase2Start: 0,
-    stopped: false,
-    canvasCSSWidth: 0,
-    canvasCSSHeight: 0,
-  };
+  let currentGrid = null;
+  let rawBrightness = null; // kept so sliders can re-process instantly
 
-  function resetState() {
-    state = {
+  const MONO_FONT = (getComputedStyle(document.documentElement)
+    .getPropertyValue("--mono") || "monospace").trim();
+
+  let state = freshState();
+  function freshState() {
+    return {
       formationStarted: false,
       skipped: false,
       messageShown: false,
+      panelShown: false,
       phase2Start: 0,
       stopped: false,
       canvasCSSWidth: 0,
       canvasCSSHeight: 0,
     };
+  }
+
+  function resetState() {
+    state = freshState();
     particles = [];
     introText.textContent = "";
     introWrap.classList.remove("fade-out");
     introWrap.style.opacity = "";
     canvasWrap.classList.remove("visible");
     finalMessage.classList.remove("show");
+    tunePanel.classList.remove("show");
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     if (rafId) cancelAnimationFrame(rafId);
   }
@@ -713,7 +684,7 @@
   function sizeCanvas(grid) {
     const cssW = grid.cols * grid.cellW;
     const cssH = grid.rows * grid.cellH;
-    const dpr = Math.min(window.devicePixelRatio || 1, 2); // cap for performance
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
     canvas.width = Math.round(cssW * dpr);
     canvas.height = Math.round(cssH * dpr);
     canvas.style.width = cssW + "px";
@@ -723,9 +694,6 @@
     state.canvasCSSHeight = cssH;
   }
 
-  // The main render loop. Runs once per animation frame; computes every
-  // particle's current x/y/alpha from elapsed time (no per-frame physics
-  // simulation needed, which keeps this cheap and very smooth on phones).
   function renderLoop(now) {
     const t = now - state.phase2Start;
     ctx.clearRect(0, 0, state.canvasCSSWidth, state.canvasCSSHeight);
@@ -733,7 +701,7 @@
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.shadowColor = "rgba(255,150,180,0.55)";
-    ctx.shadowBlur = isMobile ? 0 : 3; // skip glow blur on phones to stay smooth
+    ctx.shadowBlur = isMobile ? 0 : 3;
 
     let allSettled = true;
 
@@ -762,7 +730,7 @@
         } else {
           x = p.targetX; y = p.targetY + bob; alpha = p.alphaTarget;
         }
-      } else { // "fill" particle
+      } else { // fill
         if (t < p.appearDelay) {
           alpha = 0; x = p.targetX; y = p.targetY; allSettled = false;
         } else if (t < p.appearDelay + FADE_IN_DUR) {
@@ -784,16 +752,17 @@
     if (allSettled && !state.messageShown) {
       state.messageShown = true;
       setTimeout(() => finalMessage.classList.add("show"), 500);
+      revealPanel();
     }
 
     if (!state.stopped) rafId = requestAnimationFrame(renderLoop);
   }
 
-  let currentGrid = null;
-  // Read once, not every frame: avoids a costly getComputedStyle() call
-  // 60 times a second, which matters most on lower-end phones.
-  const MONO_FONT = (getComputedStyle(document.documentElement)
-    .getPropertyValue("--mono") || "monospace").trim();
+  function revealPanel() {
+    if (state.panelShown) return;
+    state.panelShown = true;
+    setTimeout(() => tunePanel.classList.add("show"), 300);
+  }
 
   function beginPortraitFormation() {
     if (state.formationStarted) return;
@@ -802,14 +771,53 @@
     introWrap.classList.add("fade-out");
     canvasWrap.classList.add("visible");
 
-    loadPhotoAndSample().then(({ grid, brightness }) => {
+    loadPhotoAndSample().then(({ grid, raw }) => {
       currentGrid = grid;
+      rawBrightness = raw;
       sizeCanvas(grid);
-      particles = buildParticles(grid, brightness);
+      particles = buildParticles(grid, processBrightness(raw), { animate: true });
       state.phase2Start = performance.now();
-      rafId = requestAnimationFrame(renderLoop);
+      if (!rafId) rafId = requestAnimationFrame(renderLoop);
     });
   }
+
+  // Re-process the SAME photo with current slider values and snap the
+  // portrait to its formed state instantly (no re-decoding, no re-animation).
+  function retuneSnap() {
+    if (!rawBrightness || !currentGrid) return;
+    particles = buildParticles(currentGrid, processBrightness(rawBrightness), { animate: false });
+    state.skipped = true;
+    state.phase2Start = performance.now();
+    if (!rafId && !state.stopped) rafId = requestAnimationFrame(renderLoop);
+  }
+
+  // Replay the full scatter→form animation with current slider values.
+  function replayAnimation() {
+    if (!rawBrightness || !currentGrid) return;
+    state.skipped = false;
+    state.messageShown = false;
+    finalMessage.classList.remove("show");
+    particles = buildParticles(currentGrid, processBrightness(rawBrightness), { animate: true });
+    state.phase2Start = performance.now();
+    if (!rafId && !state.stopped) rafId = requestAnimationFrame(renderLoop);
+  }
+
+  /* ----- Slider wiring ----- */
+  invertToggle.addEventListener("change", () => {
+    INVERT = invertToggle.checked;
+    retuneSnap();
+  });
+  contrastRange.addEventListener("input", () => {
+    CONTRAST_BOOST = contrastRange.value / 100; // 1.00 .. 3.20
+    retuneSnap();
+  });
+  detailRange.addEventListener("input", () => {
+    // More "Detail" = lower threshold = more text included.
+    // Map 0..100 → threshold 0.62 (sparse) .. 0.18 (dense).
+    SKIP_THRESHOLD = lerp(0.62, 0.18, detailRange.value / 100);
+    retuneSnap();
+  });
+  replayBtn.addEventListener("click", replayAnimation);
 
   function openModal() {
     resetState();
@@ -818,8 +826,6 @@
     document.body.style.overflow = "hidden";
     stopHeartLoopModal = startHeartLoop(modalHearts, 1800, { faint: true });
 
-    // Phase 1: type the seed line, then hold for a breath before the
-    // sentence starts "multiplying" into the portrait.
     startTypewriter(SEED_LINE, introText, () => {
       setTimeout(beginPortraitFormation, 900);
     });
@@ -830,7 +836,7 @@
     landing.removeAttribute("aria-hidden");
     document.body.style.overflow = "";
     state.stopped = true;
-    if (rafId) cancelAnimationFrame(rafId);
+    if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
     clearTimeout(typeTimer);
     if (stopHeartLoopModal) stopHeartLoopModal();
   }
@@ -844,6 +850,7 @@
     if (!state.messageShown) {
       state.messageShown = true;
       finalMessage.classList.add("show");
+      revealPanel();
     }
   }
 
@@ -851,7 +858,6 @@
   closeBtn.addEventListener("click", closeModal);
   skipBtn.addEventListener("click", skipToEnd);
 
-  // Ambient hearts drifting up the landing page from the moment it loads.
   stopHeartLoopLanding = startHeartLoop(landingHearts, 1400, { faint: false });
 })();
 </script>
