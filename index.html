@@ -357,6 +357,13 @@
   const FILL_WINDOW    = 1400;   // spread for the late "detail fill" particles (Phase 4)
   const SCATTER_ALPHA  = 0.45;   // opacity of particles while still "scattered" / unplaced
 
+  // How "selective" the portrait is about where it puts text. Raise
+  // SKIP_THRESHOLD if the shape still looks like a solid block (excludes
+  // more of the background); lower it if too much of the photo is
+  // disappearing into empty space.
+  const SKIP_THRESHOLD = 0.16;
+  const DITHER_CUTOFF  = 0.42;
+
   const lerp = (a, b, t) => a + (b - a) * t;
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
   const easeInOutCubic = t => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
@@ -484,6 +491,31 @@
     return out;
   }
 
+  // Many real photos (well-lit selfies, indoor shots) only span a narrow,
+  // fairly bright range of brightness values — without correcting for
+  // that, almost every cell clears the "draw text here" threshold and the
+  // portrait turns into one solid block of text instead of a recognizable
+  // shape. This stretches whatever range the photo actually has out to
+  // the FULL 0..1 range, then pushes it through an S-curve around the
+  // midtones so light/dark areas separate more clearly.
+  // Raise CONTRAST_BOOST for a more graphic, high-contrast look;
+  // lower it for a softer, more even one.
+  const CONTRAST_BOOST = 1.7;
+
+  function normalizeAndBoostContrast(values) {
+    let min = 1, max = 0;
+    for (let i = 0; i < values.length; i++) {
+      if (values[i] < min) min = values[i];
+      if (values[i] > max) max = values[i];
+    }
+    const range = max - min || 1; // guard against a perfectly flat image
+    for (let i = 0; i < values.length; i++) {
+      const stretched = (values[i] - min) / range;
+      values[i] = clamp((stretched - 0.5) * CONTRAST_BOOST + 0.5, 0, 1);
+    }
+    return values;
+  }
+
   // Fallback used only if photo.jpg can't be loaded: a mathematically
   // perfect heart, so the page still feels intentional and romantic
   // even before the real photo is added.
@@ -523,7 +555,7 @@
         settled = true;
         const grid = computeGrid(img.naturalWidth || 1, img.naturalHeight || 1);
         try {
-          const brightness = sampleBrightnessFromImage(img, grid);
+          const brightness = normalizeAndBoostContrast(sampleBrightnessFromImage(img, grid));
           resolve({ grid, brightness });
         } catch (err) {
           // Some browsers can be strict about reading pixels from local
@@ -565,14 +597,14 @@
       for (let c = 0; c < grid.cols; c++) {
         const b = brightness[r * grid.cols + c];
 
-        // True negative space: skip near-black cells entirely so the
+        // True negative space: skip dim/background cells entirely so the
         // portrait has real darkness around it, not a wall of text.
-        if (b < 0.06) continue;
+        if (b < SKIP_THRESHOLD) continue;
 
         // Soft, dithered edge: low-brightness cells are only sometimes
         // included, which avoids a hard cookie-cutter outline and reads
         // more like an organic ASCII/halftone illustration.
-        if (b < 0.35 && Math.random() > b * 2.1) continue;
+        if (b < DITHER_CUTOFF && Math.random() > b * 1.9) continue;
 
         const ch = PHRASE[phraseIndex % PHRASE.length];
         phraseIndex++;
