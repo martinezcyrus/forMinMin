@@ -16,19 +16,6 @@
      No internet connection and no server is required.
   3. Until you add a real photo.jpg, the page automatically draws a soft
      placeholder heart so the demo still works out of the box.
-
-  WHAT CHANGED IN THIS FIX (the "portrait not visible" problem)
-  - The old version filled the whole frame with text as one solid block,
-    so the subject never emerged. That was a TONE-MAPPING issue, not a bug
-    in the animation. Fixed by:
-      * PERCENTILE contrast stretch (robust against a couple of stray very
-        bright / very dark pixels that used to flatten the whole image).
-      * A much higher default brightness threshold, so dark areas become
-        real negative space instead of more text.
-      * LIVE SLIDERS (Contrast / Detail) + an INVERT toggle, revealed once
-        the portrait forms — so you can dial it in for YOUR photo without
-        editing any code. Invert is the fix when your subject is DARKER
-        than the background (e.g. a selfie against a bright wall).
   ============================================================================
 -->
 
@@ -172,7 +159,7 @@
   }
   .ctrl-btn:hover{ opacity:1; background: rgba(255,107,133,0.18); }
 
-  /* Phase 1: the typed seed line */
+  /* Phase 1: the single typed line */
   #introWrap{
     width:100%; max-width: 640px;
     margin-top: 6vh;
@@ -209,58 +196,9 @@
     box-shadow: 0 0 40px rgba(255,107,133,0.12);
   }
 
-  /* ============ LIVE TUNING PANEL (revealed after portrait forms) ============ */
-  #tunePanel{
-    margin-top: 1.8rem;
-    width: 100%; max-width: 360px;
-    background: rgba(20,8,13,0.55);
-    border: 1px solid rgba(255,184,201,0.18);
-    border-radius: 14px;
-    padding: 1rem 1.15rem 1.15rem;
-    backdrop-filter: blur(6px);
-    opacity:0; transform: translateY(8px);
-    transition: opacity .8s ease, transform .8s ease;
-    pointer-events:none;
-  }
-  #tunePanel.show{ opacity:1; transform: translateY(0); pointer-events:auto; }
-  #tunePanel .panel-title{
-    font-family: var(--mono);
-    font-size:.62rem; letter-spacing:.22em; text-transform:uppercase;
-    color: var(--rosegold); opacity:.85; text-align:center;
-    margin-bottom: .9rem;
-  }
-  .tune-row{
-    display:flex; align-items:center; gap:.7rem; margin-bottom:.7rem;
-  }
-  .tune-row label{
-    font-family: var(--mono); font-size:.7rem; letter-spacing:.04em;
-    color: var(--champagne); opacity:.85; width: 4.6rem; flex:none;
-  }
-  .tune-row input[type="range"]{
-    flex:1; accent-color: var(--ember); height: 4px; cursor:pointer;
-  }
-  .tune-actions{
-    display:flex; gap:.5rem; margin-top:.4rem;
-  }
-  .tune-actions button{
-    flex:1;
-    border:1px solid rgba(255,233,214,0.25);
-    background: rgba(255,107,133,0.10);
-    color: var(--champagne);
-    font-family: var(--mono); font-size:.68rem; letter-spacing:.04em;
-    padding:.5rem; border-radius: 8px;
-    transition: background .2s ease;
-  }
-  .tune-actions button:hover{ background: rgba(255,107,133,0.22); }
-  .tune-toggle{
-    display:flex; align-items:center; gap:.5rem; margin-bottom:.85rem;
-    font-family: var(--mono); font-size:.7rem; color: var(--champagne); opacity:.85;
-  }
-  .tune-toggle input{ accent-color: var(--ember); width:16px; height:16px; cursor:pointer; }
-
   /* The closing letter */
   #finalMessage{
-    margin-top: 2.4rem;
+    margin-top: 3.2rem;
     text-align:center;
     max-width: 38ch;
     opacity:0; transform: translateY(10px);
@@ -319,7 +257,7 @@
       <button class="ctrl-btn" id="closeBtn" aria-label="Close">✕</button>
     </div>
 
-    <!-- Phase 1: the seed line -->
+    <!-- Phase 1: the seed sentence -->
     <div id="introWrap">
       <span id="introText"></span><span class="cursor" id="cursor">&nbsp;</span>
     </div>
@@ -329,27 +267,7 @@
       <canvas id="asciiCanvas" aria-label="A portrait formed entirely out of the words of this message"></canvas>
     </div>
 
-    <!-- Live tuning: appears once the portrait forms -->
-    <div id="tunePanel" aria-label="Adjust how the portrait looks">
-      <div class="panel-title">tune the portrait ❤</div>
-      <label class="tune-toggle">
-        <input type="checkbox" id="invertToggle">
-        Invert (use if the face is darker than the background)
-      </label>
-      <div class="tune-row">
-        <label for="contrastRange">Contrast</label>
-        <input type="range" id="contrastRange" min="100" max="320" value="200">
-      </div>
-      <div class="tune-row">
-        <label for="detailRange">Detail</label>
-        <input type="range" id="detailRange" min="0" max="100" value="42">
-      </div>
-      <div class="tune-actions">
-        <button id="replayBtn">▶ Replay animation</button>
-      </div>
-    </div>
-
-    <!-- Closing letter -->
+    <!-- Revealed only once the portrait is fully assembled -->
     <div id="finalMessage">
       <p>Thank you for being part of my life.<br>
          Happy 7th Monthsary, Mahal.<br>
@@ -380,13 +298,16 @@
   const FILL_WINDOW    = 1400;
   const SCATTER_ALPHA  = 0.45;
 
-  // These are now LIVE-TUNABLE via the on-screen sliders. The values below
-  // are just sensible starting points that carve out real negative space
-  // (the old defaults of 0.16 / 1.7 produced the "solid block" you saw).
-  let SKIP_THRESHOLD = 0.40;   // cells dimmer than this become empty space
-  let DITHER_SPAN    = 0.18;   // soft probabilistic band just above the threshold
-  let CONTRAST_BOOST = 2.0;    // S-curve strength around the midtones
-  let INVERT         = false;  // flip light/dark (for dark-subject-on-light-bg photos)
+  // ---- TUNED FOR YOUR PHOTO (bright pink wall, two of you) ----
+  // Your picture is bright overall: the pink wall + white outfits + skin all
+  // sit high on the brightness scale, while the things that actually DEFINE
+  // the two of you (hair, the dark trousers, the shadows between you) sit low.
+  // So we INVERT — the text lands on those darker, shape-defining areas and
+  // the bright wall drops away into clean empty space. That's what lets the
+  // two figures read clearly instead of turning into one solid block of text.
+  const INVERT         = true;   // bright background -> invert so the figures show
+  const SKIP_THRESHOLD = 0.45;   // anything dimmer (after invert) = empty space
+  const DITHER_CUTOFF  = 0.62;   // soft, organic edge instead of a hard cut-out
 
   const lerp = (a, b, t) => a + (b - a) * t;
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
@@ -411,14 +332,16 @@
     container.appendChild(span);
     setTimeout(() => span.remove(), duration * 1000 + 200);
   }
+
   function startHeartLoop(container, intervalMs, opts) {
     if (reduceMotion) return () => {};
     const id = setInterval(() => spawnHeart(container, opts), intervalMs);
     return () => clearInterval(id);
   }
 
-  /* ---------------- 3. TYPEWRITER (Phase 1) ---------------- */
+  /* ---------------- 3. TYPEWRITER EFFECT (Phase 1) ---------------- */
   let typeTimer = null;
+
   function startTypewriter(text, el, onDone) {
     el.textContent = "";
     let i = 0;
@@ -430,16 +353,19 @@
         let delay = rand(45, 95);
         if (lastChar === "," || lastChar === ".") delay += 260;
         typeTimer = setTimeout(step, delay);
-      } else if (onDone) onDone();
+      } else if (onDone) {
+        onDone();
+      }
     };
     typeTimer = setTimeout(step, 300);
   }
+
   function finishTypewriterInstantly(text, el) {
     clearTimeout(typeTimer);
     el.textContent = text;
   }
 
-  /* ---------------- 4. IMAGE BRIGHTNESS SAMPLING ---------------- */
+  /* ---------------- 4. IMAGE BRIGHTNESS SAMPLING (+ heart fallback) ---------------- */
 
   function computeGrid(imgW, imgH) {
     const fontSize = isMobile ? 6.5 : 8.5;
@@ -466,9 +392,6 @@
     return { cols, rows, cellW, cellH, fontSize };
   }
 
-  // Reads back a RAW 0..1 luminance value per cell. We keep this raw copy
-  // around so the sliders can re-process it instantly without re-decoding
-  // the photo every time.
   function sampleBrightnessFromImage(img, grid) {
     const off = document.createElement("canvas");
     off.width = grid.cols;
@@ -485,27 +408,25 @@
     return out;
   }
 
-  // ===== THE KEY FIX =====
-  // Old code stretched between the single darkest & single brightest pixel,
-  // so one stray highlight/shadow flattened everything into the midtones and
-  // the portrait became a solid block. Instead we stretch between the 5th and
-  // 95th PERCENTILES (robust to outliers), then apply an S-curve and optional
-  // invert. Returns a fresh array so the raw copy stays untouched.
-  function processBrightness(raw) {
-    const n = raw.length;
-    const sorted = Float32Array.from(raw).sort();
+  // Stretch contrast using the 5th/95th PERCENTILES (robust: a single very
+  // bright or very dark pixel can't flatten the whole image the way plain
+  // min/max can), push it through an S-curve, then optionally invert so a
+  // bright-background photo paints its figures instead of its wall.
+  const CONTRAST_BOOST = 1.8;
+
+  function normalizeAndBoostContrast(values) {
+    const n = values.length;
+    const sorted = Float32Array.from(values).sort();
     const lo = sorted[Math.floor(n * 0.05)];
     const hi = sorted[Math.floor(n * 0.95)];
-    const range = (hi - lo) || 1;
-
-    const out = new Float32Array(n);
+    const range = (hi - lo) || 1; // guard against a perfectly flat image
     for (let i = 0; i < n; i++) {
-      let v = clamp((raw[i] - lo) / range, 0, 1);          // robust contrast stretch
-      v = clamp((v - 0.5) * CONTRAST_BOOST + 0.5, 0, 1);   // S-curve around midtones
-      if (INVERT) v = 1 - v;                                // dark-subject support
-      out[i] = v;
+      let v = clamp((values[i] - lo) / range, 0, 1);
+      v = clamp((v - 0.5) * CONTRAST_BOOST + 0.5, 0, 1);
+      if (INVERT) v = 1 - v;
+      values[i] = v;
     }
-    return out;
+    return values;
   }
 
   function heartFallbackBrightness(grid) {
@@ -535,8 +456,7 @@
         if (settled) return;
         settled = true;
         const grid = computeGrid(1, 1.2);
-        const raw = heartFallbackBrightness(grid);
-        resolve({ grid, raw, isFallback: true });
+        resolve({ grid, brightness: heartFallbackBrightness(grid) });
       };
 
       img.onload = () => {
@@ -544,12 +464,11 @@
         settled = true;
         const grid = computeGrid(img.naturalWidth || 1, img.naturalHeight || 1);
         try {
-          const raw = sampleBrightnessFromImage(img, grid);
-          resolve({ grid, raw, isFallback: false });
+          const brightness = normalizeAndBoostContrast(sampleBrightnessFromImage(img, grid));
+          resolve({ grid, brightness });
         } catch (err) {
           console.warn("Could not read photo.jpg pixels, using fallback heart.", err);
-          const raw = heartFallbackBrightness(grid);
-          resolve({ grid, raw, isFallback: true });
+          resolve({ grid, brightness: heartFallbackBrightness(grid) });
         }
       };
       img.onerror = useFallback;
@@ -560,25 +479,19 @@
 
   /* ---------------- 5. PARTICLE SYSTEM (Phase 2 → 4) ---------------- */
 
-  function buildParticles(grid, brightness, opts = {}) {
-    const animate = opts.animate !== false; // false => snap straight to formed
+  function buildParticles(grid, brightness) {
     const particles = [];
     let phraseIndex = 0;
     const canvasW = grid.cols * grid.cellW;
     const canvasH = grid.rows * grid.cellH;
-    const ditherCutoff = SKIP_THRESHOLD + DITHER_SPAN;
 
     for (let r = 0; r < grid.rows; r++) {
       for (let c = 0; c < grid.cols; c++) {
         const b = brightness[r * grid.cols + c];
 
-        if (b < SKIP_THRESHOLD) continue; // true negative space
+        if (b < SKIP_THRESHOLD) continue;
 
-        // Soft dithered edge in the band just above the threshold.
-        if (b < ditherCutoff) {
-          const p = (b - SKIP_THRESHOLD) / DITHER_SPAN; // 0..1 across the band
-          if (Math.random() > p) continue;
-        }
+        if (b < DITHER_CUTOFF && Math.random() > b * 1.9) continue;
 
         const ch = PHRASE[phraseIndex % PHRASE.length];
         phraseIndex++;
@@ -588,7 +501,7 @@
         const alphaTarget = Math.pow(b, 0.8);
         const floatSeed = Math.random() * Math.PI * 2;
 
-        if (animate && Math.random() < 0.65) {
+        if (Math.random() < 0.65) {
           particles.push({
             kind: "scatter",
             ch, brightness: b, alphaTarget, floatSeed,
@@ -604,7 +517,7 @@
             kind: "fill",
             ch, brightness: b, alphaTarget, floatSeed,
             targetX, targetY,
-            appearDelay: animate ? SCATTER_WINDOW + FORM_WINDOW + 200 + rand(0, FILL_WINDOW) : 0,
+            appearDelay: SCATTER_WINDOW + FORM_WINDOW + 200 + rand(0, FILL_WINDOW),
           });
         }
       }
@@ -628,18 +541,13 @@
   const skipBtn = document.getElementById("skipBtn");
   const introWrap = document.getElementById("introWrap");
   const introText = document.getElementById("introText");
+  const cursor = document.getElementById("cursor");
   const canvasWrap = document.getElementById("canvasWrap");
   const canvas = document.getElementById("asciiCanvas");
   const ctx = canvas.getContext("2d");
   const finalMessage = document.getElementById("finalMessage");
   const landingHearts = document.getElementById("landingHearts");
   const modalHearts = document.getElementById("modalHearts");
-
-  const tunePanel = document.getElementById("tunePanel");
-  const invertToggle = document.getElementById("invertToggle");
-  const contrastRange = document.getElementById("contrastRange");
-  const detailRange = document.getElementById("detailRange");
-  const replayBtn = document.getElementById("replayBtn");
 
   const SEED_LINE = "Happy 7th Monthsary, Mahal. I Love You \u2764\uFE0F";
 
@@ -648,35 +556,32 @@
   let stopHeartLoopLanding = null;
   let stopHeartLoopModal = null;
 
-  let currentGrid = null;
-  let rawBrightness = null; // kept so sliders can re-process instantly
+  let state = {
+    formationStarted: false,
+    skipped: false,
+    messageShown: false,
+    phase2Start: 0,
+    stopped: false,
+    canvasCSSWidth: 0,
+    canvasCSSHeight: 0,
+  };
 
-  const MONO_FONT = (getComputedStyle(document.documentElement)
-    .getPropertyValue("--mono") || "monospace").trim();
-
-  let state = freshState();
-  function freshState() {
-    return {
+  function resetState() {
+    state = {
       formationStarted: false,
       skipped: false,
       messageShown: false,
-      panelShown: false,
       phase2Start: 0,
       stopped: false,
       canvasCSSWidth: 0,
       canvasCSSHeight: 0,
     };
-  }
-
-  function resetState() {
-    state = freshState();
     particles = [];
     introText.textContent = "";
     introWrap.classList.remove("fade-out");
     introWrap.style.opacity = "";
     canvasWrap.classList.remove("visible");
     finalMessage.classList.remove("show");
-    tunePanel.classList.remove("show");
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     if (rafId) cancelAnimationFrame(rafId);
   }
@@ -730,7 +635,7 @@
         } else {
           x = p.targetX; y = p.targetY + bob; alpha = p.alphaTarget;
         }
-      } else { // fill
+      } else {
         if (t < p.appearDelay) {
           alpha = 0; x = p.targetX; y = p.targetY; allSettled = false;
         } else if (t < p.appearDelay + FADE_IN_DUR) {
@@ -752,17 +657,14 @@
     if (allSettled && !state.messageShown) {
       state.messageShown = true;
       setTimeout(() => finalMessage.classList.add("show"), 500);
-      revealPanel();
     }
 
     if (!state.stopped) rafId = requestAnimationFrame(renderLoop);
   }
 
-  function revealPanel() {
-    if (state.panelShown) return;
-    state.panelShown = true;
-    setTimeout(() => tunePanel.classList.add("show"), 300);
-  }
+  let currentGrid = null;
+  const MONO_FONT = (getComputedStyle(document.documentElement)
+    .getPropertyValue("--mono") || "monospace").trim();
 
   function beginPortraitFormation() {
     if (state.formationStarted) return;
@@ -771,53 +673,14 @@
     introWrap.classList.add("fade-out");
     canvasWrap.classList.add("visible");
 
-    loadPhotoAndSample().then(({ grid, raw }) => {
+    loadPhotoAndSample().then(({ grid, brightness }) => {
       currentGrid = grid;
-      rawBrightness = raw;
       sizeCanvas(grid);
-      particles = buildParticles(grid, processBrightness(raw), { animate: true });
+      particles = buildParticles(grid, brightness);
       state.phase2Start = performance.now();
-      if (!rafId) rafId = requestAnimationFrame(renderLoop);
+      rafId = requestAnimationFrame(renderLoop);
     });
   }
-
-  // Re-process the SAME photo with current slider values and snap the
-  // portrait to its formed state instantly (no re-decoding, no re-animation).
-  function retuneSnap() {
-    if (!rawBrightness || !currentGrid) return;
-    particles = buildParticles(currentGrid, processBrightness(rawBrightness), { animate: false });
-    state.skipped = true;
-    state.phase2Start = performance.now();
-    if (!rafId && !state.stopped) rafId = requestAnimationFrame(renderLoop);
-  }
-
-  // Replay the full scatter→form animation with current slider values.
-  function replayAnimation() {
-    if (!rawBrightness || !currentGrid) return;
-    state.skipped = false;
-    state.messageShown = false;
-    finalMessage.classList.remove("show");
-    particles = buildParticles(currentGrid, processBrightness(rawBrightness), { animate: true });
-    state.phase2Start = performance.now();
-    if (!rafId && !state.stopped) rafId = requestAnimationFrame(renderLoop);
-  }
-
-  /* ----- Slider wiring ----- */
-  invertToggle.addEventListener("change", () => {
-    INVERT = invertToggle.checked;
-    retuneSnap();
-  });
-  contrastRange.addEventListener("input", () => {
-    CONTRAST_BOOST = contrastRange.value / 100; // 1.00 .. 3.20
-    retuneSnap();
-  });
-  detailRange.addEventListener("input", () => {
-    // More "Detail" = lower threshold = more text included.
-    // Map 0..100 → threshold 0.62 (sparse) .. 0.18 (dense).
-    SKIP_THRESHOLD = lerp(0.62, 0.18, detailRange.value / 100);
-    retuneSnap();
-  });
-  replayBtn.addEventListener("click", replayAnimation);
 
   function openModal() {
     resetState();
@@ -836,7 +699,7 @@
     landing.removeAttribute("aria-hidden");
     document.body.style.overflow = "";
     state.stopped = true;
-    if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+    if (rafId) cancelAnimationFrame(rafId);
     clearTimeout(typeTimer);
     if (stopHeartLoopModal) stopHeartLoopModal();
   }
@@ -850,7 +713,6 @@
     if (!state.messageShown) {
       state.messageShown = true;
       finalMessage.classList.add("show");
-      revealPanel();
     }
   }
 
