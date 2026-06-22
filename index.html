@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Happy 7th Monthsary, Mahal ❤️</title>
+
+<!--
+  ============================================================================
+  HAPPY 7TH MONTHSARY — a self-contained digital love letter
+  ============================================================================
+  HOW TO USE THIS FILE
+  1. Put a photo of the two of you in the SAME FOLDER as this HTML file
+     and name it exactly:  photo.jpg
+  2. Open this HTML file in any modern browser (double-click works fine).
+     No internet connection and no server is required.
+  3. Until you add a real photo.jpg, the page automatically draws a soft
+     placeholder heart so the demo still works out of the box.
+
+  HOW IT WORKS (read the comments in <style> and <script> below for detail)
+  - The page is a single HTML file: structure (HTML), look (CSS) and
+    behaviour (JavaScript) all live here, so it works completely offline.
+  - When "photo.jpg" loads, we secretly shrink it down to a small grid
+    (e.g. 70 x 90 cells) and measure the brightness of every cell.
+  - We then create one little "particle" of text for every bright-enough
+    cell. Each particle is one character from the repeating phrase
+    "Happy 7th Monthsary, Mahal. I Love You ❤️".
+  - Those particles start out scattered randomly across the screen (so it
+    looks like the phrase is multiplying), then drift into the exact
+    position their brightness value says they belong — and the portrait
+    emerges, made entirely of the words of the message.
+  ============================================================================
+-->
+
+<style>
+  /* ==========================================================================
+     DESIGN TOKENS
+     A small, named palette + two type roles, used consistently everywhere.
+     - noir / wine     -> base background (warm near-black, not pure #000)
+     - blush / ember    -> the "pulse" of the page: hearts, glow, accents
+     - rosegold         -> headings / buttons, a quiet metallic warmth
+     - champagne        -> the colour the final love letter text fades in as
+     Typography:
+     - Display/serif    -> "Iowan Old Style / Palatino / Georgia" stack,
+                            used for the big romantic headline + final letter
+     - Mono              -> used for the typed line AND the ASCII portrait,
+                            because a love letter that looks "typed" on a
+                            typewriter is the whole visual idea of this piece
+  ========================================================================== */
+  :root{
+    --noir: #0b0608;
+    --wine: #2a0f1a;
+    --wine-deep: #190810;
+    --blush: #ffb8c9;
+    --ember: #ff6b85;
+    --rosegold: #e9b58c;
+    --champagne: #f7e9d6;
+    --ink: #f3e6ea;
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif;
+    --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, "Courier New", monospace;
+  }
+
+  *{ box-sizing: border-box; }
+
+  html, body{
+    margin:0; padding:0; height:100%;
+    background: var(--noir);
+    color: var(--ink);
+    font-family: var(--serif);
+    overflow-x:hidden;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* A warm, vignette-style radial gradient instead of flat black —
+     keeps the "dark theme" requirement but feels candlelit, not corporate. */
+  body{
+    background:
+      radial-gradient(ellipse at 50% 20%, rgba(255,140,170,0.10), transparent 55%),
+      radial-gradient(ellipse at 50% 100%, var(--wine) 0%, var(--wine-deep) 45%, var(--noir) 80%);
+    min-height: 100vh;
+  }
+
+  button{ font-family: inherit; cursor:pointer; }
+  button:focus-visible{ outline: 2px solid var(--blush); outline-offset: 3px; }
+
+  /* ==========================================================================
+     FLOATING HEARTS (ambient atmosphere)
+     Pure CSS keyframe animation. JS only spawns/removes the elements;
+     all the motion itself is handled by the GPU via CSS transforms.
+  ========================================================================== */
+  .hearts-layer{
+    position:absolute; inset:0; overflow:hidden; pointer-events:none; z-index:1;
+  }
+  .heart-particle{
+    position:absolute; bottom:-10%;
+    color: var(--ember);
+    opacity:.55;
+    will-change: transform, opacity;
+    animation: floatUp linear forwards;
+    filter: drop-shadow(0 0 6px rgba(255,107,133,.55));
+  }
+  @keyframes floatUp{
+    0%   { transform: translate(0,0) rotate(0deg);   opacity:0; }
+    10%  { opacity:.6; }
+    90%  { opacity:.35; }
+    100% { transform: translate(var(--drift,20px), -115vh) rotate(360deg); opacity:0; }
+  }
+
+  /* ==========================================================================
+     LANDING PAGE
+  ========================================================================== */
+  .landing{
+    position:relative; z-index:2;
+    min-height:100vh; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; text-align:center;
+    padding: 8vh 6vw;
+  }
+  .landing .eyebrow{
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: var(--rosegold);
+    opacity:.85;
+    margin-bottom: 1.1rem;
+  }
+  .landing h1{
+    font-size: clamp(1.9rem, 6vw, 3.4rem);
+    line-height:1.15;
+    margin: 0 0 0.9rem 0;
+    font-weight: 500;
+    color: var(--champagne);
+    text-shadow: 0 0 18px rgba(255,184,201,0.35), 0 0 2px rgba(255,255,255,0.2);
+  }
+  .landing p.sub{
+    font-size: clamp(0.95rem, 2.4vw, 1.1rem);
+    color: var(--blush);
+    opacity:.8;
+    max-width: 36ch;
+    margin: 0 0 2.6rem 0;
+    font-style: italic;
+  }
+
+  /* The signature interaction: a single button whose glow gently
+     "breathes" like a heartbeat — restrained motion, but it's the one
+     moment on this page allowed to draw the eye. */
+  #openBtn{
+    position:relative;
+    border:1px solid rgba(255,184,201,0.55);
+    background: linear-gradient(180deg, rgba(255,184,201,0.14), rgba(255,107,133,0.06));
+    color: var(--champagne);
+    padding: 0.95rem 2.1rem;
+    border-radius: 999px;
+    font-size: clamp(0.95rem, 2.3vw, 1.08rem);
+    letter-spacing: 0.02em;
+    backdrop-filter: blur(4px);
+    animation: heartbeatGlow 2.6s ease-in-out infinite;
+    transition: transform .25s ease;
+  }
+  #openBtn:hover{ transform: translateY(-2px) scale(1.03); }
+  #openBtn:active{ transform: translateY(0) scale(0.98); }
+  @keyframes heartbeatGlow{
+    0%, 100% { box-shadow: 0 0 14px rgba(255,107,133,0.25); }
+    50%      { box-shadow: 0 0 30px rgba(255,107,133,0.55); }
+  }
+
+  /* ==========================================================================
+     MODAL / SURPRISE OVERLAY
+  ========================================================================== */
+  #modalOverlay{
+    position:fixed; inset:0; z-index:50;
+    background:
+      radial-gradient(ellipse at 50% 15%, rgba(255,140,170,0.08), transparent 60%),
+      linear-gradient(180deg, var(--noir), var(--wine-deep) 70%, var(--noir));
+    display:flex; flex-direction:column; align-items:center; justify-content:flex-start;
+    padding: 7vh 5vw 6vh;
+    opacity:0; visibility:hidden;
+    transition: opacity .6s ease;
+    overflow-y:auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  #modalOverlay.open{ opacity:1; visibility:visible; }
+
+  .modal-controls{
+    position:fixed; top: max(14px, env(safe-area-inset-top)); right:16px; z-index:60;
+    display:flex; gap:.5rem;
+  }
+  .ctrl-btn{
+    border:1px solid rgba(255,233,214,0.3);
+    background: rgba(20,8,13,0.55);
+    color: var(--champagne);
+    font-family: var(--mono);
+    font-size: .72rem;
+    letter-spacing:.05em;
+    padding: .45rem .8rem;
+    border-radius: 999px;
+    opacity:.75;
+    transition: opacity .2s ease, background .2s ease;
+  }
+  .ctrl-btn:hover{ opacity:1; background: rgba(255,107,133,0.18); }
+
+  /* Phase 1: the single typed line, the "seed" sentence of the whole piece */
+  #introWrap{
+    width:100%; max-width: 640px;
+    margin-top: 6vh;
+    text-align:center;
+    transition: opacity .7s ease, transform .7s ease;
+  }
+  #introWrap.fade-out{ opacity:0; transform: translateY(-14px) scale(.98); pointer-events:none; }
+
+  #introText{
+    font-family: var(--mono);
+    font-size: clamp(1rem, 3.6vw, 1.45rem);
+    line-height:1.6;
+    color: var(--champagne);
+    text-shadow: 0 0 12px rgba(255,184,201,0.45);
+  }
+  .cursor{
+    display:inline-block; width: 0.55ch; margin-left:2px;
+    background: var(--blush);
+    animation: blink 0.9s step-end infinite;
+  }
+  @keyframes blink{ 50%{ opacity:0; } }
+
+  /* Phase 2–4: the canvas where the portrait assembles itself out of text */
+  #canvasWrap{
+    margin-top: 4vh;
+    opacity:0; transform: scale(.97);
+    transition: opacity .9s ease, transform .9s ease;
+    display:flex; justify-content:center;
+  }
+  #canvasWrap.visible{ opacity:1; transform: scale(1); }
+  #asciiCanvas{
+    max-width: 92vw;
+    border-radius: 6px;
+    box-shadow: 0 0 40px rgba(255,107,133,0.12);
+  }
+
+  /* The closing letter, fading in only once the portrait is fully formed */
+  #finalMessage{
+    margin-top: 3.2rem;
+    text-align:center;
+    max-width: 38ch;
+    opacity:0; transform: translateY(10px);
+    transition: opacity 1.6s ease, transform 1.6s ease;
+    padding-bottom: 4vh;
+  }
+  #finalMessage.show{ opacity:1; transform: translateY(0); }
+  #finalMessage p{
+    font-family: var(--serif);
+    font-style: italic;
+    font-size: clamp(1.02rem, 2.6vw, 1.25rem);
+    line-height:1.85;
+    color: var(--champagne);
+    text-shadow: 0 0 16px rgba(247,233,214,0.3);
+    margin:0;
+  }
+  #finalMessage .heart-rule{
+    color: var(--ember);
+    margin-top: 1.1rem;
+    letter-spacing: .4em;
+    font-size: .8rem;
+  }
+
+  /* ==========================================================================
+     RESPONSIVE ADJUSTMENTS
+  ========================================================================== */
+  @media (max-width: 480px){
+    .landing{ padding: 10vh 7vw; }
+    #introWrap{ margin-top: 3vh; }
+    .modal-controls{ right: 10px; }
+    .ctrl-btn{ padding:.4rem .65rem; font-size:.68rem; }
+  }
+
+  /* Respect users who've asked the OS for less motion: keep the *content*
+     reveal (it IS the message) but drop decorative animation. */
+  @media (prefers-reduced-motion: reduce){
+    .heart-particle, #openBtn{ animation: none !important; }
+    .cursor{ animation: none !important; opacity:1; }
+  }
+</style>
+</head>
+<body>
+
+  <!-- ======================== LANDING PAGE ======================== -->
+  <main class="landing" id="landing">
+    <div class="hearts-layer" id="landingHearts" aria-hidden="true"></div>
+
+    <p class="eyebrow">a small, slow surprise</p>
+    <h1>Happy 7th Monthsary,<br>Mahal ❤️</h1>
+    <p class="sub">Before you scroll past this — open it. It only takes a minute, and it's for you.</p>
+
+    <button id="openBtn">Open My Surprise ❤️</button>
+  </main>
+
+  <!-- ======================== MODAL / SURPRISE ======================== -->
+  <div id="modalOverlay" role="dialog" aria-label="Monthsary surprise" aria-modal="true">
+    <div class="hearts-layer" id="modalHearts" aria-hidden="true"></div>
+
+    <div class="modal-controls">
+      <button class="ctrl-btn" id="skipBtn" aria-label="Skip animation">Skip ▶</button>
+      <button class="ctrl-btn" id="closeBtn" aria-label="Close">✕</button>
+    </div>
+
+    <!-- Phase 1: the seed sentence, typed like an invisible person is writing it -->
+    <div id="introWrap">
+      <span id="introText"></span><span class="cursor" id="cursor">&nbsp;</span>
+    </div>
+
+    <!-- Phase 2–4: the same sentence, multiplied, becomes a portrait -->
+    <div id="canvasWrap">
+      <canvas id="asciiCanvas" aria-label="A portrait formed entirely out of the words of this message"></canvas>
+    </div>
+
+    <!-- Revealed only once the portrait is fully assembled -->
+    <div id="finalMessage">
+      <p>Thank you for being part of my life.<br>
+         Happy 7th Monthsary, Mahal.<br>
+         I love you always. ❤️</p>
+      <div class="heart-rule">❤ ❤ ❤</div>
+    </div>
+  </div>
+
+<script>
+/* ============================================================================
+   ALL BEHAVIOUR LIVES IN THIS ONE SCRIPT BLOCK — no build step, no backend,
+   no external libraries. Organised top-to-bottom as:
+     1. Config & small math/utility helpers
+     2. Floating hearts (ambient decoration)
+     3. Typewriter effect (Phase 1)
+     4. Image brightness sampling + heart-shaped fallback
+     5. Particle system: building + animating the ASCII portrait (Phase 2-4)
+     6. Orchestration: open/close/skip + wiring it all together
+   ============================================================================ */
+
+(() => {
+  "use strict";
+
+  /* --------------------------------------------------------------------
+     1. CONFIG & UTILITIES
+  -------------------------------------------------------------------- */
+
+  // The exact phrase, repeated endlessly to "paint" the portrait. The
+  // trailing space keeps a visible gap between one copy of the phrase
+  // and the next as it wraps across the grid.
+  const PHRASE = "Happy 7th Monthsary, Mahal. I Love You \u2764\uFE0F ";
+
+  const reduceMotion = window.matchMedia &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const isMobile = window.innerWidth < 560;
+
+  // Timing constants for the particle animation (all in milliseconds).
+  // Tweak these to make the reveal faster/slower without touching logic.
+  const SCATTER_WINDOW = 1200;   // how spread out particle "appear" times are (Phase 2)
+  const FORM_WINDOW    = 1000;   // extra spread added before particles start moving (Phase 3)
+  const FADE_IN_DUR    = 380;    // how long a single particle takes to fade in
+  const FILL_WINDOW    = 1400;   // spread for the late "detail fill" particles (Phase 4)
+  const SCATTER_ALPHA  = 0.45;   // opacity of particles while still "scattered" / unplaced
+
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  const easeInOutCubic = t => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+  const rand = (a, b) => a + Math.random() * (b - a);
+
+  /* --------------------------------------------------------------------
+     2. FLOATING HEARTS
+     Decorative only — spawns small ❤ glyphs that drift upward via the
+     CSS "floatUp" keyframe defined in <style>. JS just creates/removes
+     the DOM nodes; the browser's compositor handles the motion itself,
+     which is what keeps this smooth even on older phones.
+  -------------------------------------------------------------------- */
+  function spawnHeart(container, { faint = false } = {}) {
+    if (reduceMotion) return; // keep the page calm if the OS asks for it
+    const span = document.createElement("span");
+    span.className = "heart-particle";
+    span.textContent = "❤";
+    const size = rand(10, isMobile ? 18 : 24);
+    const left = rand(2, 96);
+    const duration = rand(9, 16);
+    const drift = rand(-60, 60);
+    span.style.left = left + "vw";
+    span.style.fontSize = size + "px";
+    span.style.opacity = faint ? 0.18 : 0.5;
+    span.style.setProperty("--drift", drift + "px");
+    span.style.animationDuration = duration + "s";
+    container.appendChild(span);
+    // Clean up after the animation finishes so the DOM never grows unbounded.
+    setTimeout(() => span.remove(), duration * 1000 + 200);
+  }
+
+  function startHeartLoop(container, intervalMs, opts) {
+    if (reduceMotion) return () => {};
+    const id = setInterval(() => spawnHeart(container, opts), intervalMs);
+    return () => clearInterval(id);
+  }
+
+  /* --------------------------------------------------------------------
+     3. TYPEWRITER EFFECT (Phase 1)
+     Reveals `text` into `el` one character at a time with slightly
+     randomised delays (so it reads like a real person typing, not a
+     mechanical loop), and a small extra pause after punctuation.
+  -------------------------------------------------------------------- */
+  let typeTimer = null;
+
+  function startTypewriter(text, el, onDone) {
+    el.textContent = "";
+    let i = 0;
+    const step = () => {
+      i++;
+      el.textContent = text.slice(0, i);
+      if (i < text.length) {
+        const lastChar = text[i - 1];
+        let delay = rand(45, 95);
+        if (lastChar === "," || lastChar === ".") delay += 260;
+        typeTimer = setTimeout(step, delay);
+      } else if (onDone) {
+        onDone();
+      }
+    };
+    typeTimer = setTimeout(step, 300); // brief pause before the "writing" begins
+  }
+
+  function finishTypewriterInstantly(text, el) {
+    clearTimeout(typeTimer);
+    el.textContent = text;
+  }
+
+  /* --------------------------------------------------------------------
+     4. IMAGE BRIGHTNESS SAMPLING (+ heart-shaped fallback)
+
+     The core trick of the whole effect: we don't need the real photo
+     pixel-for-pixel — we only need ONE brightness number (0 = pure
+     black, 1 = pure white) per grid cell. We get that cheaply by
+     drawing the photo onto a TINY off-screen canvas (cols x rows) and
+     letting the browser's own image scaling do the averaging for us.
+  -------------------------------------------------------------------- */
+
+  // Works out how many text columns/rows fit nicely on this screen while
+  // (a) respecting the photo's aspect ratio, corrected for the fact that
+  //     monospace characters are taller than they are wide, and
+  // (b) capping the total particle count so phones stay smooth.
+  function computeGrid(imgW, imgH) {
+    const fontSize = isMobile ? 6.5 : 8.5;          // px
+    const cellW = fontSize * 0.6;                    // approx monospace glyph width
+    const cellH = fontSize * 1.12;                   // line height between rows
+
+    const widthBudget = Math.min(window.innerWidth * 0.88, isMobile ? 340 : 520);
+    let cols = Math.floor(widthBudget / cellW);
+    let rows = Math.round(cols * (imgH / imgW) * (cellW / cellH));
+
+    const heightBudget = window.innerHeight * 0.56;
+    const hardCapCols = isMobile ? 64 : 96;
+    const hardCapRows = isMobile ? 96 : 130;
+
+    // Scale cols & rows down together (preserving aspect ratio) until the
+    // grid fits both the height budget AND the hard particle-count caps.
+    const scale = Math.min(
+      1,
+      heightBudget / (rows * cellH || 1),
+      hardCapCols / cols,
+      hardCapRows / rows
+    );
+    cols = Math.max(20, Math.round(cols * scale));
+    rows = Math.max(20, Math.round(rows * scale));
+
+    return { cols, rows, cellW, cellH, fontSize };
+  }
+
+  // Draws `img` down to `cols x rows` pixels and reads back a 0..1
+  // luminance value per cell using the standard perceptual weighting.
+  function sampleBrightnessFromImage(img, grid) {
+    const off = document.createElement("canvas");
+    off.width = grid.cols;
+    off.height = grid.rows;
+    const octx = off.getContext("2d", { willReadFrequently: true });
+    octx.drawImage(img, 0, 0, grid.cols, grid.rows);
+
+    const { data } = octx.getImageData(0, 0, grid.cols, grid.rows);
+    const out = new Float32Array(grid.cols * grid.rows);
+    for (let i = 0; i < grid.cols * grid.rows; i++) {
+      const r = data[i * 4], g = data[i * 4 + 1], b = data[i * 4 + 2];
+      out[i] = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    }
+    return out;
+  }
+
+  // Fallback used only if photo.jpg can't be loaded: a mathematically
+  // perfect heart, so the page still feels intentional and romantic
+  // even before the real photo is added.
+  function heartFallbackBrightness(grid) {
+    const out = new Float32Array(grid.cols * grid.rows);
+    for (let r = 0; r < grid.rows; r++) {
+      for (let c = 0; c < grid.cols; c++) {
+        const x = (c / (grid.cols - 1) - 0.5) * 2.6;
+        const y = -((r / (grid.rows - 1) - 0.5) * 2.6) - 0.15;
+        // Classic implicit heart curve: (x²+y²-1)³ - x²y³ <= 0 is "inside".
+        const f = Math.pow(x * x + y * y - 1, 3) - x * x * y * y * y;
+        let b = 0;
+        if (f <= 0) {
+          const d = Math.sqrt(x * x + (y + 0.25) * (y + 0.25));
+          b = clamp(1.1 - d * 0.42, 0.45, 1); // brighter near the heart's core
+        }
+        out[r * grid.cols + c] = b;
+      }
+    }
+    return out;
+  }
+
+  function loadPhotoAndSample() {
+    return new Promise((resolve) => {
+      const img = new Image();
+      let settled = false;
+
+      const useFallback = () => {
+        if (settled) return;
+        settled = true;
+        const grid = computeGrid(1, 1.2); // a pleasant heart aspect ratio
+        resolve({ grid, brightness: heartFallbackBrightness(grid) });
+      };
+
+      img.onload = () => {
+        if (settled) return;
+        settled = true;
+        const grid = computeGrid(img.naturalWidth || 1, img.naturalHeight || 1);
+        try {
+          const brightness = sampleBrightnessFromImage(img, grid);
+          resolve({ grid, brightness });
+        } catch (err) {
+          // Some browsers can be strict about reading pixels from local
+          // file:// images. If that happens, fall back gracefully rather
+          // than breaking the surprise.
+          console.warn("Could not read photo.jpg pixels, using fallback heart.", err);
+          resolve({ grid, brightness: heartFallbackBrightness(grid) });
+        }
+      };
+      img.onerror = useFallback;
+      img.src = "photo.jpg";
+      setTimeout(useFallback, 2500); // safety net if the image hangs
+    });
+  }
+
+  /* --------------------------------------------------------------------
+     5. PARTICLE SYSTEM (Phase 2 → 4)
+
+     Every visible "character" of the portrait is a tiny particle with:
+       - a target position (where it belongs in the final portrait)
+       - either a scattered starting position (kind: "scatter") that it
+         drifts in from, or no starting position at all (kind: "fill"),
+         meaning it simply fades in directly at its final spot, later.
+     ~65% of particles are "scatter" particles — these create Phase 2
+     (copies of the phrase appearing all over the screen) and Phase 3
+     (those copies drifting into the shape of the photo). The remaining
+     ~35% are "fill" particles that fade in afterwards, directly in
+     place — this is Phase 4, "continue adding text until the portrait
+     is fully visible".
+  -------------------------------------------------------------------- */
+
+  function buildParticles(grid, brightness) {
+    const particles = [];
+    let phraseIndex = 0;
+    const canvasW = grid.cols * grid.cellW;
+    const canvasH = grid.rows * grid.cellH;
+
+    for (let r = 0; r < grid.rows; r++) {
+      for (let c = 0; c < grid.cols; c++) {
+        const b = brightness[r * grid.cols + c];
+
+        // True negative space: skip near-black cells entirely so the
+        // portrait has real darkness around it, not a wall of text.
+        if (b < 0.06) continue;
+
+        // Soft, dithered edge: low-brightness cells are only sometimes
+        // included, which avoids a hard cookie-cutter outline and reads
+        // more like an organic ASCII/halftone illustration.
+        if (b < 0.35 && Math.random() > b * 2.1) continue;
+
+        const ch = PHRASE[phraseIndex % PHRASE.length];
+        phraseIndex++;
+
+        const targetX = c * grid.cellW + grid.cellW / 2;
+        const targetY = r * grid.cellH + grid.cellH / 2;
+        const alphaTarget = Math.pow(b, 0.8); // gentle gamma curve, nicer gradient
+        const floatSeed = Math.random() * Math.PI * 2;
+
+        if (Math.random() < 0.65) {
+          // "scatter" particle -> appears somewhere random, then travels home
+          particles.push({
+            kind: "scatter",
+            ch, brightness: b, alphaTarget, floatSeed,
+            targetX, targetY,
+            startX: Math.random() * canvasW,
+            startY: Math.random() * canvasH,
+            appearDelay: rand(0, SCATTER_WINDOW),
+            moveDelay: SCATTER_WINDOW + 150 + rand(0, FORM_WINDOW),
+            moveDuration: rand(800, 1400),
+          });
+        } else {
+          // "fill" particle -> fades in later, directly at its final spot
+          particles.push({
+            kind: "fill",
+            ch, brightness: b, alphaTarget, floatSeed,
+            targetX, targetY,
+            appearDelay: SCATTER_WINDOW + FORM_WINDOW + 200 + rand(0, FILL_WINDOW),
+          });
+        }
+      }
+    }
+    return particles;
+  }
+
+  // Maps brightness (0..1) to a colour: dim cells glow soft rose, the
+  // brightest cells glow warm champagne — so the portrait looks like it's
+  // gently lit from within, rather than just "white text on black".
+  function brightnessToColor(b) {
+    const r = Math.round(lerp(232, 255, b));
+    const g = Math.round(lerp(120, 238, b));
+    const bl = Math.round(lerp(150, 214, b));
+    return `rgb(${r},${g},${bl})`;
+  }
+
+  /* --------------------------------------------------------------------
+     6. ORCHESTRATION
+     Wires together: landing button -> typewriter -> particle build ->
+     animation loop -> final message. Also handles Skip / Close.
+  -------------------------------------------------------------------- */
+
+  const landing = document.getElementById("landing");
+  const openBtn = document.getElementById("openBtn");
+  const modalOverlay = document.getElementById("modalOverlay");
+  const closeBtn = document.getElementById("closeBtn");
+  const skipBtn = document.getElementById("skipBtn");
+  const introWrap = document.getElementById("introWrap");
+  const introText = document.getElementById("introText");
+  const cursor = document.getElementById("cursor");
+  const canvasWrap = document.getElementById("canvasWrap");
+  const canvas = document.getElementById("asciiCanvas");
+  const ctx = canvas.getContext("2d");
+  const finalMessage = document.getElementById("finalMessage");
+  const landingHearts = document.getElementById("landingHearts");
+  const modalHearts = document.getElementById("modalHearts");
+
+  const SEED_LINE = "Happy 7th Monthsary, Mahal. I Love You \u2764\uFE0F";
+
+  let particles = [];
+  let rafId = null;
+  let stopHeartLoopLanding = null;
+  let stopHeartLoopModal = null;
+
+  // Mutable per-run state, recreated fresh every time the modal opens so
+  // the whole reveal can be replayed from the very start.
+  let state = {
+    formationStarted: false,
+    skipped: false,
+    messageShown: false,
+    phase2Start: 0,
+    stopped: false,
+    canvasCSSWidth: 0,
+    canvasCSSHeight: 0,
+  };
+
+  function resetState() {
+    state = {
+      formationStarted: false,
+      skipped: false,
+      messageShown: false,
+      phase2Start: 0,
+      stopped: false,
+      canvasCSSWidth: 0,
+      canvasCSSHeight: 0,
+    };
+    particles = [];
+    introText.textContent = "";
+    introWrap.classList.remove("fade-out");
+    introWrap.style.opacity = "";
+    canvasWrap.classList.remove("visible");
+    finalMessage.classList.remove("show");
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (rafId) cancelAnimationFrame(rafId);
+  }
+
+  function sizeCanvas(grid) {
+    const cssW = grid.cols * grid.cellW;
+    const cssH = grid.rows * grid.cellH;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2); // cap for performance
+    canvas.width = Math.round(cssW * dpr);
+    canvas.height = Math.round(cssH * dpr);
+    canvas.style.width = cssW + "px";
+    canvas.style.height = cssH + "px";
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    state.canvasCSSWidth = cssW;
+    state.canvasCSSHeight = cssH;
+  }
+
+  // The main render loop. Runs once per animation frame; computes every
+  // particle's current x/y/alpha from elapsed time (no per-frame physics
+  // simulation needed, which keeps this cheap and very smooth on phones).
+  function renderLoop(now) {
+    const t = now - state.phase2Start;
+    ctx.clearRect(0, 0, state.canvasCSSWidth, state.canvasCSSHeight);
+    ctx.font = `${currentGrid.fontSize}px ${MONO_FONT}`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.shadowColor = "rgba(255,150,180,0.55)";
+    ctx.shadowBlur = isMobile ? 0 : 3; // skip glow blur on phones to stay smooth
+
+    let allSettled = true;
+
+    for (let i = 0; i < particles.length; i++) {
+      const p = particles[i];
+      let x, y, alpha;
+      const bob = reduceMotion ? 0 : Math.sin(now / 900 + p.floatSeed) * 0.6;
+
+      if (state.skipped) {
+        x = p.targetX; y = p.targetY; alpha = p.alphaTarget;
+      } else if (p.kind === "scatter") {
+        if (t < p.appearDelay) {
+          alpha = 0; x = p.startX; y = p.startY; allSettled = false;
+        } else if (t < p.appearDelay + FADE_IN_DUR) {
+          const k = (t - p.appearDelay) / FADE_IN_DUR;
+          alpha = lerp(0, SCATTER_ALPHA, k); x = p.startX; y = p.startY; allSettled = false;
+        } else if (t < p.moveDelay) {
+          alpha = SCATTER_ALPHA; x = p.startX; y = p.startY + (reduceMotion ? 0 : Math.sin(now / 600 + p.floatSeed) * 1.4);
+          allSettled = false;
+        } else if (t < p.moveDelay + p.moveDuration) {
+          const k = easeInOutCubic((t - p.moveDelay) / p.moveDuration);
+          x = lerp(p.startX, p.targetX, k);
+          y = lerp(p.startY, p.targetY, k);
+          alpha = lerp(SCATTER_ALPHA, p.alphaTarget, k);
+          allSettled = false;
+        } else {
+          x = p.targetX; y = p.targetY + bob; alpha = p.alphaTarget;
+        }
+      } else { // "fill" particle
+        if (t < p.appearDelay) {
+          alpha = 0; x = p.targetX; y = p.targetY; allSettled = false;
+        } else if (t < p.appearDelay + FADE_IN_DUR) {
+          const k = (t - p.appearDelay) / FADE_IN_DUR;
+          alpha = lerp(0, p.alphaTarget, k); x = p.targetX; y = p.targetY; allSettled = false;
+        } else {
+          x = p.targetX; y = p.targetY + bob; alpha = p.alphaTarget;
+        }
+      }
+
+      if (alpha > 0.01) {
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = brightnessToColor(p.brightness);
+        ctx.fillText(p.ch, x, y);
+      }
+    }
+    ctx.globalAlpha = 1;
+
+    if (allSettled && !state.messageShown) {
+      state.messageShown = true;
+      setTimeout(() => finalMessage.classList.add("show"), 500);
+    }
+
+    if (!state.stopped) rafId = requestAnimationFrame(renderLoop);
+  }
+
+  let currentGrid = null;
+  // Read once, not every frame: avoids a costly getComputedStyle() call
+  // 60 times a second, which matters most on lower-end phones.
+  const MONO_FONT = (getComputedStyle(document.documentElement)
+    .getPropertyValue("--mono") || "monospace").trim();
+
+  function beginPortraitFormation() {
+    if (state.formationStarted) return;
+    state.formationStarted = true;
+
+    introWrap.classList.add("fade-out");
+    canvasWrap.classList.add("visible");
+
+    loadPhotoAndSample().then(({ grid, brightness }) => {
+      currentGrid = grid;
+      sizeCanvas(grid);
+      particles = buildParticles(grid, brightness);
+      state.phase2Start = performance.now();
+      rafId = requestAnimationFrame(renderLoop);
+    });
+  }
+
+  function openModal() {
+    resetState();
+    landing.setAttribute("aria-hidden", "true");
+    modalOverlay.classList.add("open");
+    document.body.style.overflow = "hidden";
+    stopHeartLoopModal = startHeartLoop(modalHearts, 1800, { faint: true });
+
+    // Phase 1: type the seed line, then hold for a breath before the
+    // sentence starts "multiplying" into the portrait.
+    startTypewriter(SEED_LINE, introText, () => {
+      setTimeout(beginPortraitFormation, 900);
+    });
+  }
+
+  function closeModal() {
+    modalOverlay.classList.remove("open");
+    landing.removeAttribute("aria-hidden");
+    document.body.style.overflow = "";
+    state.stopped = true;
+    if (rafId) cancelAnimationFrame(rafId);
+    clearTimeout(typeTimer);
+    if (stopHeartLoopModal) stopHeartLoopModal();
+  }
+
+  function skipToEnd() {
+    finishTypewriterInstantly(SEED_LINE, introText);
+    state.skipped = true;
+    if (!state.formationStarted) {
+      beginPortraitFormation();
+    }
+    if (!state.messageShown) {
+      state.messageShown = true;
+      finalMessage.classList.add("show");
+    }
+  }
+
+  openBtn.addEventListener("click", openModal);
+  closeBtn.addEventListener("click", closeModal);
+  skipBtn.addEventListener("click", skipToEnd);
+
+  // Ambient hearts drifting up the landing page from the moment it loads.
+  stopHeartLoopLanding = startHeartLoop(landingHearts, 1400, { faint: false });
+})();
+</script>
+</body>
+</html>
